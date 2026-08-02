@@ -5,6 +5,9 @@
 #include <cstring>
 #include <poll.h>
 #include <vector>
+#include <sstream>
+#include <unordered_map>
+std::unordered_map<std::string, std::string> store;
 
 int main() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -71,8 +74,34 @@ int main() {
                         poll_fds.erase(poll_fds.begin() + i);
                         i--;
                     } else {
-                        std::cout << "Received: " << buffer << "\n";
-                        send(poll_fds[i].fd, buffer, bytes_read, 0);
+                        std::string command(buffer);
+                        std::istringstream iss(command);
+                        std::string cmd, key, value;
+                        iss >> cmd >> key;
+
+                        std::string response;
+
+                        if (cmd == "SET") {
+                            iss >> value;
+                            store[key] = value;
+                            response = "OK\n";
+                        } else if (cmd == "GET") {
+                            if (store.count(key)) {
+                                response = store[key] + "\n";
+                            } else {
+                                response = "(nil)\n";
+                            }
+                        } else if (cmd == "DEL") {
+                            if (store.erase(key)) {
+                                response = "1\n";
+                            } else {
+                                response = "0\n";
+                            }
+                        } else {
+                            response = "ERROR: unknown command\n";
+                        }
+
+                        send(poll_fds[i].fd, response.c_str(), response.size(), 0);
                     }
                 }
             }
@@ -81,3 +110,4 @@ int main() {
 close(server_fd);
     return 0;
 }
+
