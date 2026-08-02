@@ -3,6 +3,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstring>
+#include <poll.h>
+#include <vector>
 
 int main() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -31,24 +33,51 @@ int main() {
     }
     std::cout << "Listening on port 6380...\n";
 
-    std::cout << "Waiting for a client to connect...\n";
-    int client_fd = accept(server_fd, nullptr, nullptr);
-    if (client_fd == -1) {
-        std::cerr << "Accept failed\n";
-        close(server_fd);
-        return 1;
-    }
-    std::cout << "Client connected! client_fd = " << client_fd << "\n";
+    std::vector<pollfd> poll_fds;
 
-    char buffer[1024] = {0};
-    int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
-    if (bytes_read > 0) {
-        std::cout << "Received: " << buffer << "\n";
-        send(client_fd, buffer, bytes_read, 0);
-        std::cout << "Echoed message back to client.\n";
-    }
+    pollfd server_pollfd;
+    server_pollfd.fd = server_fd;
+    server_pollfd.events = POLLIN;
+    poll_fds.push_back(server_pollfd);
 
-    close(client_fd);
-    close(server_fd);
+    std::cout << "Entering event loop...\n";
+
+    while (true) {
+        int ready = poll(poll_fds.data(), poll_fds.size(), -1);
+        if (ready == -1) {
+            perror("poll failed");
+            break;
+        }
+
+        for (size_t i = 0; i < poll_fds.size(); i++) {
+            if (poll_fds[i].revents & POLLIN) {
+
+                if (poll_fds[i].fd == server_fd) {
+                    int client_fd = accept(server_fd, nullptr, nullptr);
+                    if (client_fd != -1) {
+                        std::cout << "New client connected! fd = " << client_fd << "\n";
+                        pollfd client_pollfd;
+                        client_pollfd.fd = client_fd;
+                        client_pollfd.events = POLLIN;
+                        poll_fds.push_back(client_pollfd);
+                    }
+                } else {
+                    char buffer[1024] = {0};
+                    int bytes_read = recv(poll_fds[i].fd, buffer, sizeof(buffer), 0);
+
+                    if (bytes_read <= 0) {
+                        std::cout << "Client disconnected. fd = " << poll_fds[i].fd << "\n";
+                        close(poll_fds[i].fd);
+                        poll_fds.erase(poll_fds.begin() + i);
+                        i--;
+                    } else {
+                        std::cout << "Received: " << buffer << "\n";
+                        send(poll_fds[i].fd, buffer, bytes_read, 0);
+                    }
+                }
+            }
+        }
+    }
+close(server_fd);
     return 0;
 }
