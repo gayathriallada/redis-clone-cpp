@@ -1,94 +1,51 @@
-# Redis Clone (C++)
+# Redis Clone in C++
 
-An in-memory key-value store built from scratch in C++, modeled conceptually
-on Redis. No external libraries or frameworks — the TCP server, event loop,
-command parser, and storage engine are all hand-written using raw POSIX
-socket calls.
+An in-memory key-value store built from scratch in C++, inspired by Redis — built to understand low-level networking, event-driven servers, and systems programming concepts by implementing them directly, without any external database or networking library.
 
-## Why this project
+## Status: In Progress (Weekends 1–3 of 8 complete)
 
-Most applications use Redis without ever touching what's underneath. This
-project exists to understand that layer first-hand — how a server accepts
-connections, serves many clients without blocking, and handles malformed
-input and disconnects without falling over.
+### Implemented so far
 
-## What's built (Weekends 1–3)
+- **TCP server foundation** — raw POSIX sockets: `socket()`, `bind()`, `listen()`, `accept()`, `recv()`, `send()`
+- **Multi-client event loop** — a single-threaded `poll()`-based loop handling many simultaneous client connections, the same core architectural pattern used internally by Redis and nginx
+- **Command protocol** — `SET key value`, `GET key`, `DEL key`, backed by a `std::unordered_map` for O(1) average-case operations
+- **Correct TCP message framing** — incoming data is buffered per client and split strictly on newlines, since a single `recv()` call is not guaranteed to contain exactly one command (a real bug found and fixed during development — see below)
+- **Input validation** — missing values, missing keys, and unknown commands are rejected with clear error messages instead of corrupting state or crashing
+- **Automated test suite** (`robustness_test.py`) — 10 passing test cases covering the happy path, malformed input, and server health after errors
 
-**TCP Server Foundation**
-- Raw socket creation, binding, listening via socket()/bind()/listen()
-- Client handling via accept(), recv(), send(), close()
+### Planned (not yet implemented)
 
-**Multi-Client Event Loop**
-- poll()-based event loop — single thread serving many simultaneous clients
-- Same core architectural pattern real Redis and nginx use internally
+- LRU eviction under a configurable memory limit
+- TTL / key expiry (`SET key value EX <seconds>`)
+- Disk persistence (snapshotting + reload on startup)
+- Write-ahead log for crash recovery
+- Benchmarking (throughput/latency numbers)
 
-**Command Protocol**
-- `SET key value` → OK
-- `GET key` → value, or (nil) if missing
-- `DEL key` → 1 (deleted) or 0 (not found)
-- Backed by `std::unordered_map<std::string, std::string>`
+## A Real Bug Worth Mentioning
 
-**Robustness**
-- Per-client buffering: correctly handles partial and multi-command TCP reads
-  (a single recv() call is never assumed to be exactly one command)
-- Malformed command handling: missing args, unknown commands, empty lines —
-  all rejected cleanly with clear error messages, no crash
-- Clean client disconnect handling, including mid-command disconnects — no
-  hangs, no leaked file descriptors, server remains healthy afterward
+During the robustness testing pass, `SET name` (missing a value) was found to silently return `OK` while storing an empty string — and worse, it caused the *next* command sent in the same batch to be misread as invalid. Root cause: TCP doesn't guarantee that one `recv()` call maps to exactly one client command — multiple lines can arrive concatenated in a single read. The fix was to buffer incoming bytes per client and only process one complete newline-terminated command at a time, rather than assuming each `recv()` was a clean, single command.
 
-**Testing**
-- Automated Python test client (`robustness_test.py`) — 10 test cases
-  covering the happy path, malformed input, and post-error server health,
-  all passing
+## Tech
 
-## The hardest bug I hit
+C++, POSIX Sockets, `poll()`
 
-Early in Weekend 3, `SET name` (missing value) returned `OK` instead of an
-error — and the *next* command sent right after (`GET name`) was misread as
-"unknown command," even though GET was working fine seconds earlier.
-
-Root cause: the server read one `recv()` buffer and assumed it contained
-exactly one command. But TCP is a byte stream, not a message stream — two
-commands sent close together can arrive in a single `recv()` call. Because
-`istringstream`'s `>>` treats newlines as whitespace, a value-read that
-should have failed instead silently consumed the next line's command word.
-
-Fix: added a per-client buffer that persists across `recv()` calls, splitting
-strictly on `\n` and only processing one complete line at a time, leaving
-partial data buffered until the rest arrives.
-
-## Architecture
-
-Client 1, Client 2, ... Client N
-|
-v
-poll() event loop (watches all client fds + listening socket)
-|
-v
-Command Parser (istringstream, per-line)
-|
-v
-In-Memory Store (std::unordered_map)
-
-
-## Running it
+## Running It
 
 ```bash
 g++ server.cpp -o server
 ./server
 ```
 
-Server listens on port 6380. Test manually with `nc 127.0.0.1 6380`, or run
-the automated suite:
-
+In another terminal:
 ```bash
-python3 robustness_test.py
+python3 test_client.py          # basic SET/GET/DEL verification
+python3 robustness_test.py      # full validation + edge-case suite
 ```
 
-## Roadmap (not yet built)
+## Architecture
 
-- Weekend 4: LRU eviction
-- Weekend 5: TTL / key expiry
-- Weekend 6: Disk persistence
-- Weekend 7: Write-ahead log (stretch)
-- Weekend 8: Benchmarking + final polish
+```
+Client 1 ─┐
+Client 2 ─┼──► poll() event loop ──► Command Parser ──► In-Memory Store
+Client N ─┘      (watches all fds)     (SET/GET/DEL)     (std::unordered_map)
+```
