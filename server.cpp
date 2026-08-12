@@ -7,7 +7,9 @@
 #include <vector>
 #include <sstream>
 #include <unordered_map>
+
 std::unordered_map<std::string, std::string> store;
+std::unordered_map<int, std::string> client_buffers;
 
 int main() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -23,7 +25,7 @@ int main() {
     address.sin_port = htons(6380);
 
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) == -1) {
-        std::cerr << "Bind failed\n";
+        perror("Bind failed");
         close(server_fd);
         return 1;
     }
@@ -71,43 +73,62 @@ int main() {
                     if (bytes_read <= 0) {
                         std::cout << "Client disconnected. fd = " << poll_fds[i].fd << "\n";
                         close(poll_fds[i].fd);
+                        client_buffers.erase(poll_fds[i].fd);
                         poll_fds.erase(poll_fds.begin() + i);
                         i--;
                     } else {
-                        std::string command(buffer);
-                        std::istringstream iss(command);
-                        std::string cmd, key, value;
-                        iss >> cmd >> key;
+                        client_buffers[poll_fds[i].fd].append(buffer, bytes_read);
+                        std::string &clientBuf = client_buffers[poll_fds[i].fd];
 
-                        std::string response;
+                        size_t pos;
+                        while ((pos = clientBuf.find('\n')) != std::string::npos) {
+                            std::string line = clientBuf.substr(0, pos);
+                            clientBuf.erase(0, pos + 1);
 
-                        if (cmd == "SET") {
-                            iss >> value;
-                            store[key] = value;
-                            response = "OK\n";
-                        } else if (cmd == "GET") {
-                            if (store.count(key)) {
-                                response = store[key] + "\n";
+                            if (!line.empty() && line.back() == '\r') line.pop_back();
+
+                            std::istringstream iss(line);
+                            std::string cmd, key, value;
+                            iss >> cmd >> key;
+                            std::string response;
+
+                            if (cmd.empty()) {
+                                continue;
+                            } else if (cmd == "SET") {
+                                if (!(iss >> value)) {
+                                    response = "ERROR: SET requires a key and a value\n";
+                                } else {
+                                    store[key] = value;
+                                    response = "OK\n";
+                                }
+                            } else if (cmd == "GET") {
+                                if (key.empty()) {
+                                    response = "ERROR: GET requires a key\n";
+                                } else if (store.count(key)) {
+                                    response = store[key] + "\n";
+                                } else {
+                                    response = "(nil)\n";
+                                }
+                            } else if (cmd == "DEL") {
+                                if (key.empty()) {
+                                    response = "ERROR: DEL requires a key\n";
+                                } else if (store.erase(key)) {
+                                    response = "1\n";
+                                } else {
+                                    response = "0\n";
+                                }
                             } else {
-                                response = "(nil)\n";
+                                response = "ERROR: unknown command\n";
                             }
-                        } else if (cmd == "DEL") {
-                            if (store.erase(key)) {
-                                response = "1\n";
-                            } else {
-                                response = "0\n";
-                            }
-                        } else {
-                            response = "ERROR: unknown command\n";
+
+                            send(poll_fds[i].fd, response.c_str(), response.size(), 0);
                         }
-
-                        send(poll_fds[i].fd, response.c_str(), response.size(), 0);
                     }
                 }
             }
         }
     }
-close(server_fd);
+
+    close(server_fd);
     return 0;
 }
-
