@@ -48,4 +48,11 @@ python3 robustness_test.py      # full validation + edge-case suite
 Client 1 ─┐
 Client 2 ─┼──► poll() event loop ──► Command Parser ──► In-Memory Store
 Client N ─┘      (watches all fds)     (SET/GET/DEL)     (std::unordered_map)
+
 ```
+##supported commands
+currently implementing redis- compatible commands
+- PING
+- SET
+- GET
+
