@@ -30,6 +30,21 @@ private:
         if (head) head->prev = node;
         head = node;
     }
+    void removeTail() {
+        if (!tail) return;
+        Node* nodeToRemove = tail;
+
+        if (tail == head) {
+            head = nullptr;
+            tail = nullptr;
+        } else {
+            tail = tail->prev;
+            tail->next = nullptr;
+        }
+
+        map.erase(nodeToRemove->key);
+        delete nodeToRemove;
+    }
 public:
     LRUCache(int cap) : capacity(cap), head(nullptr), tail(nullptr) {}
  void debugPrint() {
@@ -64,6 +79,11 @@ public:
     // Delete this once get()/put() call moveToFront internally instead.
     void debugMoveToFront(const std::string& key) {
         moveToFront(map[key]);
+    }
+    // TEMPORARY — exposes removeTail for the test file to call directly.
+    // Delete this once put() calls removeTail internally when over capacity.
+    void debugRemoveTail() {
+        removeTail();
     }
 };
 
