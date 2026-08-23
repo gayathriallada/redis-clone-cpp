@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 #include <string>
-#include <iostream>
+
 class LRUCache {
 private:
     struct Node {
@@ -18,6 +18,7 @@ private:
     std::unordered_map<std::string, Node*> map;
     Node* head;
     Node* tail;
+
     void moveToFront(Node* node) {
         if (node == head) return;
 
@@ -29,63 +30,68 @@ private:
         node->next = head;
         if (head) head->prev = node;
         head = node;
+        if (!tail) tail = node;
     }
+
     void removeTail() {
         if (!tail) return;
-        Node* nodeToRemove = tail;
 
-        if (tail == head) {
-            head = nullptr;
-            tail = nullptr;
-        } else {
+        map.erase(tail->key);
+
+        Node* toDelete = tail;
+
+        if (tail->prev) {
             tail = tail->prev;
             tail->next = nullptr;
+        } else {
+            head = nullptr;
+            tail = nullptr;
         }
 
-        map.erase(nodeToRemove->key);
-        delete nodeToRemove;
+        delete toDelete;
     }
+
 public:
     LRUCache(int cap) : capacity(cap), head(nullptr), tail(nullptr) {}
- void debugPrint() {
-        Node* cur = head;
-        while (cur) {
-            std::cout << cur->key;
-            if (cur->next) std::cout << " <-> ";
-            cur = cur->next;
+
+    void put(const std::string& key, const std::string& value) {
+        if (map.count(key)) {
+            Node* node = map[key];
+            node->value = value;
+            moveToFront(node);
+            return;
         }
-        std::cout << "\n";
+
+        if ((int)map.size() >= capacity) {
+            removeTail();
+        }
+
+        Node* node = new Node(key, value);
+        map[key] = node;
+        moveToFront(node);
     }
 
-    // TEMPORARY — for testing moveToFront in isolation only.
-    // Delete this once put() exists and can build lists the real way.
-    void debugBuildThreeNodeList() {
-        Node* a = new Node("A", "vA");
-        Node* b = new Node("B", "vB");
-        Node* c = new Node("C", "vC");
-
-        a->next = b; b->prev = a;
-        b->next = c; c->prev = b;
-
-        head = a;
-        tail = c;
-
-        map["A"] = a;
-        map["B"] = b;
-        map["C"] = c;
+    bool get(const std::string& key, std::string& value) {
+        if (!map.count(key)) return false;
+        Node* node = map[key];
+        moveToFront(node);
+        value = node->value;
+        return true;
     }
 
-    // TEMPORARY — exposes moveToFront for the test file to call directly.
-    // Delete this once get()/put() call moveToFront internally instead.
-    void debugMoveToFront(const std::string& key) {
-        moveToFront(map[key]);
-    }
-    // TEMPORARY — exposes removeTail for the test file to call directly.
-    // Delete this once put() calls removeTail internally when over capacity.
-    void debugRemoveTail() {
-        removeTail();
+    bool remove(const std::string& key) {
+        if (!map.count(key)) return false;
+        Node* node = map[key];
+
+        if (node->prev) node->prev->next = node->next;
+        if (node->next) node->next->prev = node->prev;
+        if (node == head) head = node->next;
+        if (node == tail) tail = node->prev;
+
+        map.erase(key);
+        delete node;
+        return true;
     }
 };
 
 #endif
-

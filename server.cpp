@@ -7,8 +7,9 @@
 #include <vector>
 #include <sstream>
 #include <unordered_map>
+#include "lru_cache.h"
 
-std::unordered_map<std::string, std::string> store;
+LRUCache store(1000);
 std::unordered_map<int, std::string> client_buffers;
 
 int main() {
@@ -93,26 +94,27 @@ int main() {
                             std::string response;
 
                             if (cmd.empty()) {
-                                continue;
+                                response = "ERROR: unknown command\n";
                             } else if (cmd == "SET") {
                                 if (!(iss >> value)) {
                                     response = "ERROR: SET requires a key and a value\n";
                                 } else {
-                                    store[key] = value;
+                                    store.put(key, value);
                                     response = "OK\n";
                                 }
                             } else if (cmd == "GET") {
+                                std::string val;
                                 if (key.empty()) {
                                     response = "ERROR: GET requires a key\n";
-                                } else if (store.count(key)) {
-                                    response = store[key] + "\n";
+                                } else if (store.get(key, val)) {
+                                    response = val + "\n";
                                 } else {
                                     response = "(nil)\n";
                                 }
                             } else if (cmd == "DEL") {
                                 if (key.empty()) {
                                     response = "ERROR: DEL requires a key\n";
-                                } else if (store.erase(key)) {
+                                } else if (store.remove(key)) {
                                     response = "1\n";
                                 } else {
                                     response = "0\n";
