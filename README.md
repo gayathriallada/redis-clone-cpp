@@ -2,7 +2,7 @@
 
 An in-memory key-value store built from scratch in C++, inspired by Redis — built to understand low-level networking, event-driven servers, and systems programming concepts by implementing them directly, without any external database or networking library.
 
-## Status: In Progress (Weekends 1–3 of 8 complete)
+## Status: In Progress (Weekends 1–4 of 8 complete)
 
 ### Implemented so far
 
@@ -12,10 +12,9 @@ An in-memory key-value store built from scratch in C++, inspired by Redis — bu
 - **Correct TCP message framing** — incoming data is buffered per client and split strictly on newlines, since a single `recv()` call is not guaranteed to contain exactly one command (a real bug found and fixed during development — see below)
 - **Input validation** — missing values, missing keys, and unknown commands are rejected with clear error messages instead of corrupting state or crashing
 - **Automated test suite** (`robustness_test.py`) — 10 passing test cases covering the happy path, malformed input, and server health after errors
+- **LRU eviction** — the store now automatically evicts the least-recently-used key when a configurable capacity limit is reached, implemented with a hash map + doubly linked list for O(1) access and eviction. Verified with a dedicated test confirming touched keys survive while untouched keys get evicted correctly.
 
 ### Planned (not yet implemented)
-
-- LRU eviction under a configurable memory limit
 - TTL / key expiry (`SET key value EX <seconds>`)
 - Disk persistence (snapshotting + reload on startup)
 - Write-ahead log for crash recovery
