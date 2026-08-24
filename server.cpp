@@ -99,7 +99,25 @@ int main() {
                                 if (!(iss >> value)) {
                                     response = "ERROR: SET requires a key and a value\n";
                                 } else {
-                                    store.put(key, value);
+std::string exFlag;
+        time_t expiry = 0;
+        if (iss >> exFlag) {
+            if (exFlag == "EX") {
+                int seconds;
+                if (iss >> seconds && seconds > 0) {
+                    expiry = time(nullptr) + seconds;
+                } else {
+                    response = "ERROR: EX requires a positive number of seconds\n";
+                    send(poll_fds[i].fd, response.c_str(), response.size(), 0);
+                    continue;
+                }
+            } else {
+                response = "ERROR: unknown SET option\n";
+                send(poll_fds[i].fd, response.c_str(), response.size(), 0);
+                continue;
+            }
+        }
+                                    store.put(key, value,expiry);
                                     response = "OK\n";
                                 }
                             } else if (cmd == "GET") {
