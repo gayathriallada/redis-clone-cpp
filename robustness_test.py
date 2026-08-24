@@ -58,3 +58,25 @@ def test_eviction():
     s.close()
 
 test_eviction()
+def test_ttl():
+    import time
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("127.0.0.1", 6380))
+
+    def send(cmd):
+        s.sendall((cmd + "\n").encode())
+        return s.recv(1024).decode().strip()
+
+    send("SET ttlkey val EX 2")
+    immediate = send("GET ttlkey")
+    time.sleep(3)
+    after = send("GET ttlkey")
+
+    if immediate == "val" and after == "(nil)":
+        print("[PASS] TTL expiry works correctly")
+    else:
+        print(f"[FAIL] Expected val then (nil), got {immediate} then {after}")
+
+    s.close()
+
+test_ttl()
