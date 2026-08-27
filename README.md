@@ -2,7 +2,7 @@
 
 An in-memory key-value store built from scratch in C++, inspired by Redis — built to understand low-level networking, event-driven servers, and systems programming concepts by implementing them directly, without any external database or networking library.
 
-## Status: In Progress (Weekends 1–4 of 8 complete)
+## Status: In Progress (Weekends 1–5 of 8 complete)
 
 ### Implemented so far
 
