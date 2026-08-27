@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <string>
 #include <ctime>
+#include <fstream>
 
 class LRUCache {
 private:
@@ -60,6 +61,25 @@ private:
 
 public:
     LRUCache(int cap) : capacity(cap), head(nullptr), tail(nullptr) {}
+
+    void save(const std::string& filename) {
+        std::ofstream out(filename, std::ios::binary);
+        if (!out) return;
+
+        Node* current = head;
+        while (current) {
+            if (!isExpired(current)) {
+                size_t keyLen = current->key.size();
+                size_t valLen = current->value.size();
+                out.write(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
+                out.write(current->key.data(), keyLen);
+                out.write(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+                out.write(current->value.data(), valLen);
+                out.write(reinterpret_cast<char*>(&current->expiry), sizeof(current->expiry));
+            }
+            current = current->next;
+        }
+    }
 
     void put(const std::string& key, const std::string& value, time_t expiry = 0) {
         if (map.count(key)) {
