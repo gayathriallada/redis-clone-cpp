@@ -1,0 +1,7 @@
+server
+test_lru
+leftover
+test_snapshot.bin
+dump.rdb
+*.o
+
