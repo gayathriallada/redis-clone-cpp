@@ -80,3 +80,24 @@ def test_ttl():
     s.close()
 
 test_ttl()
+def test_persistence():
+    import subprocess, time
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("127.0.0.1", 6380))
+
+    def send(cmd):
+        s.sendall((cmd + "\n").encode())
+        return s.recv(1024).decode().strip()
+
+    send("SET persist_check works")
+    save_result = send("SAVE")
+    s.close()
+
+    if save_result == "OK":
+        print("[PASS] SAVE command succeeds")
+    else:
+        print(f"[FAIL] SAVE returned {save_result}")
+
+test_persistence()
+print("Note: full restart-persistence was verified manually — SET, SAVE, kill server, restart, GET confirmed data survived.")

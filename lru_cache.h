@@ -5,6 +5,7 @@
 #include <string>
 #include <ctime>
 #include <fstream>
+#include <vector>
 
 class LRUCache {
 private:
@@ -62,25 +63,6 @@ private:
 public:
     LRUCache(int cap) : capacity(cap), head(nullptr), tail(nullptr) {}
 
-    void save(const std::string& filename) {
-        std::ofstream out(filename, std::ios::binary);
-        if (!out) return;
-
-        Node* current = head;
-        while (current) {
-            if (!isExpired(current)) {
-                size_t keyLen = current->key.size();
-                size_t valLen = current->value.size();
-                out.write(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
-                out.write(current->key.data(), keyLen);
-                out.write(reinterpret_cast<char*>(&valLen), sizeof(valLen));
-                out.write(current->value.data(), valLen);
-                out.write(reinterpret_cast<char*>(&current->expiry), sizeof(current->expiry));
-            }
-            current = current->next;
-        }
-    }
-
     void put(const std::string& key, const std::string& value, time_t expiry = 0) {
         if (map.count(key)) {
             Node* node = map[key];
@@ -136,6 +118,58 @@ public:
                 remove(current->key);
             }
             current = prevNode;
+        }
+    }
+
+    void save(const std::string& filename) {
+        std::ofstream out(filename, std::ios::binary);
+        if (!out) return;
+
+        Node* current = head;
+        while (current) {
+            if (!isExpired(current)) {
+                size_t keyLen = current->key.size();
+                size_t valLen = current->value.size();
+                out.write(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
+                out.write(current->key.data(), keyLen);
+                out.write(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+                out.write(current->value.data(), valLen);
+                out.write(reinterpret_cast<char*>(&current->expiry), sizeof(current->expiry));
+            }
+            current = current->next;
+        }
+    }
+
+    void load(const std::string& filename) {
+        std::ifstream in(filename, std::ios::binary);
+        if (!in) return;
+
+        std::vector<Node*> loaded;
+
+        while (true) {
+            size_t keyLen;
+            if (!in.read(reinterpret_cast<char*>(&keyLen), sizeof(keyLen))) break;
+
+            std::string key(keyLen, '\0');
+            in.read(&key[0], keyLen);
+
+            size_t valLen;
+            in.read(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+
+            std::string value(valLen, '\0');
+            in.read(&value[0], valLen);
+
+            time_t expiry;
+            in.read(reinterpret_cast<char*>(&expiry), sizeof(expiry));
+
+            Node* node = new Node(key, value);
+            node->expiry = expiry;
+            loaded.push_back(node);
+        }
+
+        for (auto it = loaded.rbegin(); it != loaded.rend(); ++it) {
+            put((*it)->key, (*it)->value, (*it)->expiry);
+            delete *it;
         }
     }
 };

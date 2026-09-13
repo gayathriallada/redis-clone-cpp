@@ -7,12 +7,16 @@
 #include <vector>
 #include <sstream>
 #include <unordered_map>
+#include <ctime>
 #include "lru_cache.h"
 
 LRUCache store(1000);
 std::unordered_map<int, std::string> client_buffers;
 
 int main() {
+    store.load("dump.rdb");
+    std::cout << "Loaded data from dump.rdb (if it existed)\n";
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         std::cerr << "Failed to create socket\n";
@@ -49,10 +53,15 @@ int main() {
     std::cout << "Entering event loop...\n";
 
     while (true) {
-        int ready = poll(poll_fds.data(), poll_fds.size(), -1);
+        int ready = poll(poll_fds.data(), poll_fds.size(), 1000);
         if (ready == -1) {
             perror("poll failed");
             break;
+        }
+
+        if (ready == 0) {
+            store.sweepExpired();
+            continue;
         }
 
         for (size_t i = 0; i < poll_fds.size(); i++) {
@@ -99,26 +108,27 @@ int main() {
                                 if (!(iss >> value)) {
                                     response = "ERROR: SET requires a key and a value\n";
                                 } else {
-std::string exFlag;
-        time_t expiry = 0;
-        if (iss >> exFlag) {
-            if (exFlag == "EX") {
-                int seconds;
-                if (iss >> seconds && seconds > 0) {
-                    expiry = time(nullptr) + seconds;
-                } else {
-                    response = "ERROR: EX requires a positive number of seconds\n";
-                    send(poll_fds[i].fd, response.c_str(), response.size(), 0);
-                    continue;
-                }
-            } else {
-                response = "ERROR: unknown SET option\n";
-                send(poll_fds[i].fd, response.c_str(), response.size(), 0);
-                continue;
-            }
-        }
-                                    store.put(key, value,expiry);
-                                    response = "OK\n";
+                                    std::string exFlag;
+                                    time_t expiry = 0;
+                                    bool badEx = false;
+                                    if (iss >> exFlag) {
+                                        if (exFlag == "EX") {
+                                            int seconds;
+                                            if (iss >> seconds && seconds > 0) {
+                                                expiry = time(nullptr) + seconds;
+                                            } else {
+                                                response = "ERROR: EX requires a positive number of seconds\n";
+                                                badEx = true;
+                                            }
+                                        } else {
+                                            response = "ERROR: unknown SET option\n";
+                                            badEx = true;
+                                        }
+                                    }
+                                    if (!badEx) {
+                                        store.put(key, value, expiry);
+                                        response = "OK\n";
+                                    }
                                 }
                             } else if (cmd == "GET") {
                                 std::string val;
@@ -137,6 +147,9 @@ std::string exFlag;
                                 } else {
                                     response = "0\n";
                                 }
+                            } else if (cmd == "SAVE") {
+                                store.save("dump.rdb");
+                                response = "OK\n";
                             } else {
                                 response = "ERROR: unknown command\n";
                             }
