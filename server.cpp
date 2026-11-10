@@ -12,7 +12,7 @@
 #include <ctime>
 #include "lru_cache.h"
 
-LRUCache store(1000);
+LRUCache store(200000);
 std::unordered_map<int, std::string> client_buffers;
 
 static void walAppend(const std::string& line) {
@@ -57,6 +57,8 @@ int main() {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(6380);
 
+    int reuse = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) == -1) {
         perror("Bind failed");
         close(server_fd);
