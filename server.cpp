@@ -1,3 +1,5 @@
+#include <fstream>
+#include <ctime>
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -13,8 +15,34 @@
 LRUCache store(1000);
 std::unordered_map<int, std::string> client_buffers;
 
+static void walAppend(const std::string& line) {
+    std::ofstream wal("wal.log", std::ios::app);
+    wal << line << "\n";
+}
+
 int main() {
     store.load("dump.rdb");
+    {
+        std::ifstream walIn("wal.log");
+        std::string walLine;
+        int replayed = 0;
+        while (std::getline(walIn, walLine)) {
+            std::istringstream wiss(walLine);
+            std::string wcmd, wkey, wval;
+            long long wexp = 0;
+            wiss >> wcmd >> wkey;
+            if (wcmd == "SET" && (wiss >> wval >> wexp)) {
+                if (wexp == 0 || wexp > (long long)time(nullptr)) {
+                    store.put(wkey, wval, (time_t)wexp);
+                    replayed++;
+                }
+            } else if (wcmd == "DEL") {
+                store.remove(wkey);
+                replayed++;
+            }
+        }
+        std::cout << "Replayed " << replayed << " WAL entries\n";
+    }
     std::cout << "Loaded data from dump.rdb (if it existed)\n";
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -127,6 +155,7 @@ int main() {
                                     }
                                     if (!badEx) {
                                         store.put(key, value, expiry);
+                                        walAppend("SET " + key + " " + value + " " + std::to_string((long long)expiry));
                                         response = "OK\n";
                                     }
                                 }
@@ -143,12 +172,14 @@ int main() {
                                 if (key.empty()) {
                                     response = "ERROR: DEL requires a key\n";
                                 } else if (store.remove(key)) {
+                                    walAppend("DEL " + key);
                                     response = "1\n";
                                 } else {
                                     response = "0\n";
                                 }
                             } else if (cmd == "SAVE") {
                                 store.save("dump.rdb");
+                                { std::ofstream walTrunc("wal.log", std::ios::trunc); }
                                 response = "OK\n";
                             } else {
                                 response = "ERROR: unknown command\n";

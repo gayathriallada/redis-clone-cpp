@@ -5,3 +5,5 @@ test_snapshot.bin
 dump.rdb
 *.o
 
+wal.log
+run*.log
