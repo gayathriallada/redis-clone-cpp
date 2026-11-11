@@ -71,7 +71,7 @@ A single `recv()` can return half a command or several commands. Incoming bytes 
 
 ### Expiry
 - **Lazy:** an expired key is removed when someone tries to read it.
-- **Active:** `sweepExpired()` runs periodically in the event loop and removes expired keys that nobody is reading.
+- - **Active:** `sweepExpired()` runs whenever the event loop is idle for a second and removes expired keys that nobody is reading. Under constant traffic it doesn't run, so lazy expiry still covers reads.
 
 ### Persistence
 - **Snapshot:** `SAVE` writes every key, value and expiry to `dump.rdb` in a length-prefixed binary format. It is loaded automatically on startup.
