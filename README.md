@@ -99,3 +99,15 @@ Client 2 ─┼──► poll() event loop ──► Command Parser ──► LR
 Client N ─┘      (watches all fds)   (SET/GET/DEL/SAVE)  (hash map +      + Snapshot (dump.rdb)
                                                           linked list)
 ```
+
+## Design trade-offs
+
+- **`poll()` instead of `epoll`:** `poll()` scans every file descriptor on each call, so its cost grows with the number of connections. That's fine at tens or hundreds of clients, and it's portable and simple. For thousands of connections I'd move to `epoll`.
+- **Single-threaded:** no locks, and each command is atomic by construction, which keeps LRU ordering and WAL ordering easy to reason about. The cost is one core, and a slow operation blocks every client. `SAVE` runs on the event-loop thread, so clients wait while it writes. Real Redis forks a child process for background saves.
+- **WAL without `fsync`:** writes stay fast. The log survives a process crash (tested with `kill -9`) but not a power loss.
+- **Plain-text protocol, not RESP:** easy to debug with `nc` or a script, but real Redis clients can't connect.
+- **Capacity counts keys, not bytes:** large values can use far more memory than small ones. Redis limits by bytes with `maxmemory`.
+- **Benchmarks:** measured with a single connection and a Python client, so they show round-trip latency, not peak server throughput.
+
+### What I'd change at scale
+`epoll`, a configurable `fsync` policy, background snapshots via `fork()`, RESP support, a multi-connection benchmark, then replication.
