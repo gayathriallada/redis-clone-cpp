@@ -1,4 +1,4 @@
-# Redis Clone in C++
+ # Redis Clone in C++
 
 An in-memory key-value store built from scratch in C++, inspired by Redis — built to understand low-level networking, event-driven servers, and systems programming concepts by implementing them directly, without any external database or networking library.
 
