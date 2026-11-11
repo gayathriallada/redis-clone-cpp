@@ -1,0 +1,29 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: g++ server.cpp -o server
+      - name: Start server
+        run: |
+          ./server > server.log 2>&1 &
+          sleep 2
+      - name: Run tests
+        run: |
+          python3 robustness_test.py | tee out.txt
+          ! grep -q FAIL out.txt
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t redis-clone .
+      - name: Run container and test
+        run: |
+          docker run -d -p 6380:6380 --name rc redis-clone
+          sleep 2
+          python3 robustness_test.py | tee out.txt
+          ! grep -q FAIL out.txt

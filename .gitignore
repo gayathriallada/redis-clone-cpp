@@ -7,3 +7,5 @@ dump.rdb
 
 wal.log
 run*.log
+wal.log
+out.txt
